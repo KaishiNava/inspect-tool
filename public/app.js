@@ -1,5 +1,16 @@
 const $ = s => document.querySelector(s);
-const state = { ws:null, session:null, requests:[], paused:false, selected:null, tab:"network" };
+const state = {
+  ws:null,
+  session:null,
+  requests:[],
+  console:[],
+  html:"",
+  storage:{local:{},session:{},cookies:[]},
+  pageInfo:{title:"",url:""},
+  paused:false,
+  selected:null,
+  tab:"network"
+};
 
 function toast(msg){const el=$("#toast");el.textContent=msg;el.classList.add("show");setTimeout(()=>el.classList.remove("show"),1800)}
 function setStatus(on,text){$("#dot").classList.toggle("on",on);$("#status").textContent=text}
@@ -58,13 +69,13 @@ async function connect(){
   }
 }
 function handle(msg){
-  if(msg.event==="ready"){setStatus(true,"Live");$("#origin").textContent=msg.data.url;updateInfo(msg.data)}
+  if(msg.event==="ready"){setStatus(true,"Live");$("#origin").textContent=msg.data.url;state.pageInfo={...state.pageInfo,...msg.data};updateInfo(state.pageInfo)}
   if(msg.event==="attached"){setStatus(true,"Live")}
-  if(msg.event==="navigation"){$("#url").value=msg.data.url;$("#origin").textContent=msg.data.url}
-  if(msg.event==="network"){if(!state.paused){upsertRequest(msg.data)}}
+  if(msg.event==="navigation"){$("#url").value=msg.data.url;$("#origin").textContent=msg.data.url;state.pageInfo.url=msg.data.url;updateInfo(state.pageInfo)}
+  if(msg.event==="network"){upsertRequest(msg.data);if(!state.paused)renderNetwork()}
   if(msg.event==="console"){addConsole(msg.data)}
-  if(msg.event==="html"){$("#htmlBody").textContent=msg.data||""}
-  if(msg.event==="storage"){$("#storageBody").innerHTML=storageHtml(msg.data)}
+  if(msg.event==="html"){state.html=msg.data||"";$("#htmlBody").textContent=state.html}
+  if(msg.event==="storage"){state.storage=msg.data||{local:{},session:{},cookies:[]};$("#storageBody").innerHTML=storageHtml(state.storage)}
   if(msg.event==="error"){toast(msg.message||"Error");addConsole({type:"error",text:msg.message||"Error"})}
 }
 
@@ -106,6 +117,8 @@ function esc(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 
 function addConsole(d){
   $("#consoleCount").textContent=Number($("#consoleCount").textContent||0)+1;
+  const entry={...d,time:new Date().toISOString()};
+  state.console.push(entry);
   const row=document.createElement("div");row.className=`log ${d.type==="error"?"error":d.type==="warning"?"warn":""}`;
   row.innerHTML=`<span class="time">${new Date().toLocaleTimeString()}</span>${esc(d.text)}`;
   $("#consoleBody").appendChild(row);$("#consoleBody").scrollTop=$("#consoleBody").scrollHeight;
@@ -113,7 +126,51 @@ function addConsole(d){
 function storageHtml(d){
  return `<h3>LOCAL STORAGE</h3><pre>${esc(pretty(d.local))}</pre><h3>SESSION STORAGE</h3><pre>${esc(pretty(d.session))}</pre><h3>COOKIES</h3><pre>${esc(pretty(d.cookies))}</pre>`;
 }
-function updateInfo(d){$("#infoBody").innerHTML=`<div class="info-card"><label>Title</label><div>${esc(d.title||"")}</div></div><div class="info-card"><label>URL</label><div>${esc(d.url||"")}</div></div>`}
+function updateInfo(d){
+  $("#infoBody").innerHTML=`<div class="info-card"><label>Title</label><div>${esc(d.title||"")}</div></div><div class="info-card"><label>URL</label><div>${esc(d.url||"")}</div></div>`
+}
+
+function downloadJSON(filename, data){
+  try {
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json;charset=utf-8"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;
+    a.download=filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    toast(`Downloaded ${filename}`);
+  } catch(e) { toast("Gagal membuat file JSON"); }
+}
+
+function exportAll(){
+  const data={
+    exportedAt:new Date().toISOString(),
+    tool:"FX Web Inspector",
+    version:"1.0",
+    page:state.pageInfo,
+    network:state.requests,
+    console:state.console,
+    elements:{html:state.html},
+    storage:state.storage,
+    selectedRequest:state.selected||null
+  };
+  const host=(()=>{try{return new URL(state.pageInfo.url||$("#url").value).hostname}catch{return "page"}})();
+  downloadJSON(`fx-inspector-${host}-${Date.now()}.json`,data);
+}
+
+function exportNetwork(){
+  const data={
+    exportedAt:new Date().toISOString(),
+    page:state.pageInfo,
+    total:state.requests.length,
+    requests:state.requests
+  };
+  const host=(()=>{try{return new URL(state.pageInfo.url||$("#url").value).hostname}catch{return "network"}})();
+  downloadJSON(`fx-network-${host}-${Date.now()}.json`,data);
+}
 
 function command(type,payload={}){
  if(!state.ws||state.ws.readyState!==1)return toast("Belum terhubung");
@@ -132,7 +189,7 @@ $("#url").onkeydown=e=>{if(e.key==="Enter")connect()};
 $("#reload").onclick=()=>command("reload");
 $("#filter").oninput=renderNetwork;
 $("#pause").onclick=()=>{state.paused=!state.paused;$("#pause").textContent=state.paused?"Resume":"Pause"};
-$("#clear").onclick=()=>{state.requests=[];$("#networkCount").textContent="0";$("#summary").textContent="0 requests";$("#consoleBody").innerHTML="";$("#consoleCount").textContent="0";renderNetwork();toast("Cleared")};
+$("#clear").onclick=()=>{state.requests=[];state.console=[];$("#networkCount").textContent="0";$("#summary").textContent="0 requests";$("#consoleBody").innerHTML="";$("#consoleCount").textContent="0";renderNetwork();toast("Cleared")};
 $("#copyAll").onclick=async()=>{
   try {
     await navigator.clipboard.writeText(JSON.stringify(state.requests,null,2));
@@ -142,6 +199,12 @@ $("#copyAll").onclick=async()=>{
   }
 };
 $("#closeDetail").onclick=()=>{$("#detailEmpty").classList.remove("hidden");$("#detailContent").classList.add("hidden")};
+$("#downloadAll").onclick=exportAll;
+$("#downloadNetwork").onclick=exportNetwork;
+$("#downloadSelected").onclick=()=>{
+  if(!state.selected)return toast("Pilih request terlebih dahulu");
+  downloadJSON(`fx-request-${state.selected.id}.json`,{exportedAt:new Date().toISOString(),page:state.pageInfo,request:state.selected});
+};
 $("#back").onclick=()=>command("back");
 $("#forward").onclick=()=>command("forward");
 

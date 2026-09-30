@@ -36,6 +36,8 @@
       <div class="side-bottom">
         <button id="clear">Clear</button>
         <button id="copyAll">Copy</button>
+        <button id="downloadAll" title="Download semua data sebagai JSON">JSON</button>
+        <button id="downloadNetwork" title="Download data Network sebagai JSON">NET</button>
       </div>
     </aside>
 
@@ -71,7 +73,7 @@
     </section>
 
     <aside class="details">
-      <div class="detail-head"><span>REQUEST DETAILS</span><button id="closeDetail">×</button></div>
+      <div class="detail-head"><span>REQUEST DETAILS</span><div class="detail-actions"><button id="downloadSelected" title="Download request JSON">JSON</button><button id="closeDetail">×</button></div></div>
       <div id="detailEmpty">Select a request to inspect headers, body and response.</div>
       <div id="detailContent" class="hidden">
         <div class="detail-url" id="detailUrl"></div>
