@@ -4,30 +4,59 @@ const state = { ws:null, session:null, requests:[], paused:false, selected:null,
 function toast(msg){const el=$("#toast");el.textContent=msg;el.classList.add("show");setTimeout(()=>el.classList.remove("show"),1800)}
 function setStatus(on,text){$("#dot").classList.toggle("on",on);$("#status").textContent=text}
 
-function connect(){
+async function connect(){
   const url=$("#url").value.trim();
   if(!/^https?:\/\//i.test(url)) return toast("URL harus diawali http:// atau https://");
+
+  // If a session already exists, reuse it and navigate instead of creating
+  // another browser session.
+  if(state.ws && state.ws.readyState===1 && state.session){
+    command("navigate",{url});
+    return;
+  }
+
   setStatus(false,"Connecting…");
-  state.requests=[]; renderNetwork();
-  const proto=location.protocol==="https:"?"wss":"ws";
-  const wsUrl=`${proto}://${location.host}/ws?session=${crypto.randomUUID()}`;
+  state.requests=[];
+  state.selected=null;
+  $("#detailEmpty").classList.remove("hidden");
+  $("#detailContent").classList.add("hidden");
+  renderNetwork();
+
   try {
-    const r=await fetch("/api/session",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url})});
+    const r=await fetch("/api/session",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({url})
+    });
     const data=await r.json();
     if(!r.ok) throw new Error(data.error||"Session gagal");
+
     state.session=data.id;
     const proto=location.protocol==="https:"?"wss":"ws";
     state.ws=new WebSocket(`${proto}://${location.host}${data.wsPath}`);
-    state.ws.onopen=()=>state.ws.send(JSON.stringify({type:"start",url}));
-    state.ws.onmessage=e=>handle(JSON.parse(e.data));
-    state.ws.onerror=()=>{setStatus(false,"Connection error");toast("WebSocket error")};
-    state.ws.onclose=()=>setStatus(false,"Disconnected");
+
+    state.ws.onopen=()=>{
+      setStatus(true,"Connected");
+      state.ws.send(JSON.stringify({type:"start",url:data.url||url}));
+    };
+    state.ws.onmessage=e=>{
+      try { handle(JSON.parse(e.data)); }
+      catch { toast("Pesan server tidak valid"); }
+    };
+    state.ws.onerror=()=>{
+      setStatus(false,"Connection error");
+      toast("WebSocket error");
+    };
+    state.ws.onclose=()=>{
+      if(state.ws && state.ws.readyState!==1) setStatus(false,"Disconnected");
+      state.ws=null;
+      state.session=null;
+    };
   } catch(e) {
     setStatus(false,"Disconnected");
     toast(e.message||"Gagal membuat session");
   }
 }
-
 function handle(msg){
   if(msg.event==="ready"){setStatus(true,"Live");$("#origin").textContent=msg.data.url;updateInfo(msg.data)}
   if(msg.event==="attached"){setStatus(true,"Live")}
@@ -104,9 +133,16 @@ $("#reload").onclick=()=>command("reload");
 $("#filter").oninput=renderNetwork;
 $("#pause").onclick=()=>{state.paused=!state.paused;$("#pause").textContent=state.paused?"Resume":"Pause"};
 $("#clear").onclick=()=>{state.requests=[];$("#networkCount").textContent="0";$("#summary").textContent="0 requests";$("#consoleBody").innerHTML="";$("#consoleCount").textContent="0";renderNetwork();toast("Cleared")};
-$("#copyAll").onclick=async()=>{await navigator.clipboard.writeText(JSON.stringify(state.requests,null,2));toast("Network JSON copied")};
+$("#copyAll").onclick=async()=>{
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(state.requests,null,2));
+    toast("Network JSON copied");
+  } catch {
+    toast("Clipboard tidak tersedia");
+  }
+};
 $("#closeDetail").onclick=()=>{$("#detailEmpty").classList.remove("hidden");$("#detailContent").classList.add("hidden")};
-$("#back").onclick=()=>toast("Browser history navigation is intentionally limited in this hosted inspector.");
-$("#forward").onclick=()=>toast("Browser history navigation is intentionally limited in this hosted inspector.");
+$("#back").onclick=()=>command("back");
+$("#forward").onclick=()=>command("forward");
 
 renderNetwork();setStatus(false,"Disconnected");

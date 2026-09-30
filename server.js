@@ -107,6 +107,7 @@ async function closeSession(id) {
   if (!s) return;
   sessions.delete(id);
   try { await s.context.close(); } catch {}
+  try { await s.browser.close(); } catch {}
 }
 
 async function createSession(id, url, ws) {
@@ -299,6 +300,18 @@ wss.on("connection", async (ws, req) => {
           if (cmd.type === "navigate") {
             const target = await validateTarget(cmd.url);
             await s.page.goto(target, { waitUntil: "domcontentloaded", timeout: 30000 }).catch(e =>
+              safeSend(ws, { event: "error", message: e.message })
+            );
+          }
+
+          if (cmd.type === "back") {
+            await s.page.goBack({ waitUntil: "domcontentloaded", timeout: 30000 }).catch(e =>
+              safeSend(ws, { event: "error", message: e.message })
+            );
+          }
+
+          if (cmd.type === "forward") {
+            await s.page.goForward({ waitUntil: "domcontentloaded", timeout: 30000 }).catch(e =>
               safeSend(ws, { event: "error", message: e.message })
             );
           }
