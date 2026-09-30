@@ -69,9 +69,9 @@ async function connect(){
   }
 }
 function handle(msg){
-  if(msg.event==="ready"){setStatus(true,"Live");$("#origin").textContent=msg.data.url;state.pageInfo={...state.pageInfo,...msg.data};updateInfo(state.pageInfo)}
+  if(msg.event==="ready"){setStatus(true,"Live");$("#origin").textContent=msg.data.url;state.pageInfo={...state.pageInfo,...msg.data};updateInfo(state.pageInfo);command("html");command("storage")}
   if(msg.event==="attached"){setStatus(true,"Live")}
-  if(msg.event==="navigation"){$("#url").value=msg.data.url;$("#origin").textContent=msg.data.url;state.pageInfo.url=msg.data.url;updateInfo(state.pageInfo)}
+  if(msg.event==="navigation"){$("#url").value=msg.data.url;$("#origin").textContent=msg.data.url;state.pageInfo.url=msg.data.url;updateInfo(state.pageInfo);command("html");command("storage")}
   if(msg.event==="network"){upsertRequest(msg.data);if(!state.paused)renderNetwork()}
   if(msg.event==="console"){addConsole(msg.data)}
   if(msg.event==="html"){state.html=msg.data||"";$("#htmlBody").textContent=state.html}
@@ -145,32 +145,48 @@ function downloadJSON(filename, data){
   } catch(e) { toast("Gagal membuat file JSON"); }
 }
 
-function exportAll(){
-  const data={
-    exportedAt:new Date().toISOString(),
-    tool:"FX Web Inspector",
-    version:"1.0",
-    page:state.pageInfo,
-    network:state.requests,
-    console:state.console,
-    elements:{html:state.html},
-    storage:state.storage,
-    selectedRequest:state.selected||null
-  };
-  const host=(()=>{try{return new URL(state.pageInfo.url||$("#url").value).hostname}catch{return "page"}})();
-  downloadJSON(`fx-inspector-${host}-${Date.now()}.json`,data);
+function currentPageHost(){
+  try{return new URL(state.pageInfo.url||$("#url").value).hostname||"page"}
+  catch{return "page"}
 }
 
-function exportNetwork(){
-  const data={
+function buildFullExport(){
+  return {
+    schema:"fx-web-inspector.full.v2",
     exportedAt:new Date().toISOString(),
-    page:state.pageInfo,
-    total:state.requests.length,
-    requests:state.requests
+    tool:{name:"FX Web Inspector",version:"1.0"},
+    page:{...state.pageInfo},
+    summary:{
+      networkRequests:state.requests.length,
+      consoleMessages:state.console.length,
+      htmlCaptured:!!state.html,
+      localStorageKeys:Object.keys(state.storage?.local||{}).length,
+      sessionStorageKeys:Object.keys(state.storage?.session||{}).length,
+      cookies:Array.isArray(state.storage?.cookies)?state.storage.cookies.length:0,
+      selectedRequestId:state.selected?.id||null
+    },
+    network:{
+      total:state.requests.length,
+      requests:state.requests.map(x=>({...x}))
+    },
+    console:state.console.map(x=>({...x})),
+    elements:{html:state.html||""},
+    storage:{
+      local:{...(state.storage?.local||{})},
+      session:{...(state.storage?.session||{})},
+      cookies:Array.isArray(state.storage?.cookies)?state.storage.cookies.map(x=>({...x})):[]
+    },
+    selectedRequest:state.selected?{...state.selected}:null,
+    inspector:{activeTab:state.tab,paused:state.paused,filter:$("#filter").value||""}
   };
-  const host=(()=>{try{return new URL(state.pageInfo.url||$("#url").value).hostname}catch{return "network"}})();
-  downloadJSON(`fx-network-${host}-${Date.now()}.json`,data);
 }
+
+function exportAll(){
+  const data=buildFullExport();
+  downloadJSON(`fx-web-inspector-full-${currentPageHost()}-${Date.now()}.json`,data);
+}
+
+function exportNetwork(){ exportAll(); }
 
 function command(type,payload={}){
  if(!state.ws||state.ws.readyState!==1)return toast("Belum terhubung");
@@ -200,7 +216,7 @@ $("#copyAll").onclick=async()=>{
 };
 $("#closeDetail").onclick=()=>{$("#detailEmpty").classList.remove("hidden");$("#detailContent").classList.add("hidden")};
 $("#downloadAll").onclick=exportAll;
-$("#downloadNetwork").onclick=exportNetwork;
+$("#downloadNetwork").onclick=exportAll;
 $("#downloadSelected").onclick=()=>{
   if(!state.selected)return toast("Pilih request terlebih dahulu");
   downloadJSON(`fx-request-${state.selected.id}.json`,{exportedAt:new Date().toISOString(),page:state.pageInfo,request:state.selected});
