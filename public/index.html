@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#08090b">
+<title>FX Web Inspector</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">FX</div>
+      <div><strong>Web Inspector</strong><span>NETWORK LAB</span></div>
+    </div>
+    <div class="status"><i id="dot"></i><span id="status">Disconnected</span></div>
+  </header>
+
+  <section class="toolbar">
+    <button id="back" title="Back">←</button>
+    <button id="forward" title="Forward">→</button>
+    <button id="reload" title="Reload">↻</button>
+    <div class="address"><span>⌕</span><input id="url" value="https://example.com" spellcheck="false"></div>
+    <button id="open" class="primary">Inspect</button>
+  </section>
+
+  <main class="workspace">
+    <aside class="sidebar">
+      <div class="side-title">INSPECTOR</div>
+      <button class="nav active" data-tab="network"><b>◉</b> Network <em id="networkCount">0</em></button>
+      <button class="nav" data-tab="console"><b>›_</b> Console <em id="consoleCount">0</em></button>
+      <button class="nav" data-tab="elements"><b>&lt;/&gt;</b> Elements</button>
+      <button class="nav" data-tab="storage"><b>▣</b> Storage</button>
+      <button class="nav" data-tab="info"><b>ⓘ</b> Page Info</button>
+      <div class="side-bottom">
+        <button id="clear">Clear</button>
+        <button id="copyAll">Copy</button>
+      </div>
+    </aside>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h1 id="panelTitle">Network</h1>
+          <p id="panelSub">Live request / response monitor</p>
+        </div>
+        <div class="tools">
+          <input id="filter" placeholder="Filter URL / method / status">
+          <button id="pause">Pause</button>
+        </div>
+      </div>
+
+      <div id="networkTab" class="tab">
+        <div class="summary">
+          <span id="summary">0 requests</span>
+          <span id="origin">No page</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Status</th><th>Method</th><th>Type</th><th>URL</th><th>Size</th><th>Time</th></tr></thead>
+            <tbody id="networkBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="consoleTab" class="tab hidden"><div id="consoleBody" class="console"></div></div>
+      <div id="elementsTab" class="tab hidden"><pre id="htmlBody" class="code">Open a page to inspect its HTML.</pre></div>
+      <div id="storageTab" class="tab hidden"><div id="storageBody" class="storage"></div></div>
+      <div id="infoTab" class="tab hidden"><div id="infoBody" class="info"></div></div>
+    </section>
+
+    <aside class="details">
+      <div class="detail-head"><span>REQUEST DETAILS</span><button id="closeDetail">×</button></div>
+      <div id="detailEmpty">Select a request to inspect headers, body and response.</div>
+      <div id="detailContent" class="hidden">
+        <div class="detail-url" id="detailUrl"></div>
+        <div class="detail-grid" id="detailMeta"></div>
+        <div class="detail-section"><h3>Request Headers</h3><pre id="reqHeaders"></pre></div>
+        <div class="detail-section"><h3>Request Body</h3><pre id="reqBody"></pre></div>
+        <div class="detail-section"><h3>Response Headers</h3><pre id="resHeaders"></pre></div>
+        <div class="detail-section"><h3>Response Body</h3><pre id="resBody"></pre></div>
+      </div>
+    </aside>
+  </main>
+</div>
+<div id="toast"></div>
+<script src="/app.js"></script>
+</body>
+</html>
